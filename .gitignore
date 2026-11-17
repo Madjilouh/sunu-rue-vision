@@ -1,0 +1,10 @@
+pikine*/
+mes_photos/
+resultats*/
+*.zip
+*.pt
+*.mp4
+patch.py
+__pycache__/
+.env
+*.token
