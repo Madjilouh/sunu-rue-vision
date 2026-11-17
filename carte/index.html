@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunu Rue Vision – Carte des anomalies</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#0f172a; --panel:#111c33; --line:#22314f; --txt:#e6edf7; --mute:#93a4c3;
+          --faible:#22c55e; --moyenne:#f59e0b; --elevee:#ef4444; --accent:#38bdf8; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  #app { display:grid; grid-template-columns:340px 1fr; height:100%; }
+  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:17px; } header p { margin:4px 0 0; font-size:12px; color:var(--mute); }
+  .sec { padding:12px 16px; border-bottom:1px solid var(--line); }
+  .sec h2 { margin:0 0 8px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; text-align:center; }
+  .kpi { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 2px; }
+  .kpi b { display:block; font-size:18px; } .kpi span { font-size:10px; color:var(--mute); }
+  label.chk { display:flex; align-items:center; gap:8px; font-size:13px; margin:4px 0; cursor:pointer; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  #list { overflow:auto; flex:1; min-height:0; padding:6px 10px 12px; }
+  .item { display:flex; gap:8px; align-items:center; padding:8px; border:1px solid var(--line); border-radius:8px; margin:6px 0; cursor:pointer; background:var(--bg); }
+  .item:hover { border-color:var(--accent); }
+  .item .t { font-size:13px; } .item .s { font-size:11px; color:var(--mute); }
+  .badge { font-size:10px; padding:2px 6px; border-radius:999px; border:1px solid var(--line); margin-left:auto; color:var(--mute); white-space:nowrap; }
+  button, select { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  #banner { display:none; background:#7c2d12; color:#fed7aa; font-size:12px; padding:8px 16px; }
+  #msg { font-size:12px; color:var(--mute); margin-top:6px; }
+  #map { height:100%; }
+  .leaflet-popup-content { font-size:13px; color:#111; } .leaflet-popup-content img { width:220px; border-radius:6px; margin-top:6px; display:block; }
+  .leaflet-popup-content select { color:#111; background:#fff; border-color:#ccc; padding:3px 6px; margin-top:6px; }
+  @media (max-width:800px){ #app{grid-template-columns:1fr; grid-template-rows:46vh 1fr;} aside{border-right:0; border-bottom:1px solid var(--line);} }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <header>
+      <h1>Sunu Rue Vision</h1>
+      <p>Carte des anomalies routières – tableau de bord commune</p>
+    </header>
+    <div id="banner"></div>
+    <div class="sec">
+      <div class="kpis">
+        <div class="kpi"><b id="k-total">0</b><span>Total</span></div>
+        <div class="kpi"><b id="k-elevee" style="color:var(--elevee)">0</b><span>Élevée</span></div>
+        <div class="kpi"><b id="k-moyenne" style="color:var(--moyenne)">0</b><span>Moyenne</span></div>
+        <div class="kpi"><b id="k-faible" style="color:var(--faible)">0</b><span>Faible</span></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>Filtres</h2>
+      <label class="chk"><input type="checkbox" data-sev="elevee" checked><span class="dot" style="background:var(--elevee)"></span>Gravité élevée</label>
+      <label class="chk"><input type="checkbox" data-sev="moyenne" checked><span class="dot" style="background:var(--moyenne)"></span>Gravité moyenne</label>
+      <label class="chk"><input type="checkbox" data-sev="faible" checked><span class="dot" style="background:var(--faible)"></span>Gravité faible</label>
+      <div class="row" style="margin-top:8px">
+        <select id="f-status">
+          <option value="">Tous les statuts</option>
+          <option value="signale">Signalé</option>
+          <option value="en_cours">En cours</option>
+          <option value="resolu">Résolu</option>
+        </select>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>Données</h2>
+      <div class="row">
+        <button id="btn-file">Charger un fichier .geojson</button>
+        <button id="btn-csv">Exporter CSV</button>
+        <button id="btn-demo">Démo</button>
+      </div>
+      <input type="file" id="file" accept=".geojson,.json" hidden>
+      <div id="msg"></div>
+    </div>
+    <div class="sec" style="border-bottom:0; padding-bottom:0"><h2>À traiter en priorité</h2></div>
+    <div id="list"></div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  "use strict";
+  var COLORS = { faible: "#22c55e", moyenne: "#f59e0b", elevee: "#ef4444" };
+  var WEIGHT = { faible: 1, moyenne: 2, elevee: 3 };
+  var STATUS_LABEL = { signale: "Signalé", en_cours: "En cours", resolu: "Résolu" };
+
+  var map = L.map("map").setView([14.76, -17.37], 13);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; contributeurs OpenStreetMap"
+  }).addTo(map);
+  var layer = L.layerGroup().addTo(map);
+
+  var features = [];     // anomalies chargées
+  var baseUrl = "";      // dossier d'où viennent les captures
+  var isDemo = false;
+
+  // --- suivi du statut (stocké dans le navigateur, sans serveur)
+  function statusKey(f) { return "svr_status_" + (f.properties.id) + "_" + f.geometry.coordinates.join(","); }
+  function getStatus(f) { try { return localStorage.getItem(statusKey(f)) || "signale"; } catch (e) { return "signale"; } }
+  function setStatus(f, v) { try { localStorage.setItem(statusKey(f), v); } catch (e) {} refresh(); }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function safeImg(rel) {
+    // n'accepte que des chemins relatifs simples (pas de javascript:, http:, etc.)
+    if (!rel || /^[a-z][a-z0-9+.-]*:/i.test(rel) || rel.indexOf("..") !== -1) return "";
+    return baseUrl + rel;
+  }
+  function score(f) { return (WEIGHT[f.properties.gravite] || 1) * (f.properties.confiance_max || 0.5); }
+
+  function activeSeverities() {
+    var s = {};
+    document.querySelectorAll("input[data-sev]").forEach(function (c) { s[c.dataset.sev] = c.checked; });
+    return s;
+  }
+  function filtered() {
+    var sev = activeSeverities(), st = document.getElementById("f-status").value;
+    return features.filter(function (f) {
+      return sev[f.properties.gravite] !== false && (!st || getStatus(f) === st);
+    });
+  }
+
+  function popupHtml(f, idx) {
+    var p = f.properties, img = safeImg(p.capture);
+    var html = "<b>Anomalie #" + esc(p.id) + " – " + esc(p.classe) + "</b><br>" +
+      "Gravité : <b>" + esc(p.gravite) + "</b> · confiance " + esc(p.confiance_max) + "<br>" +
+      "Position : " + esc(f.geometry.coordinates[1]) + ", " + esc(f.geometry.coordinates[0]) + "<br>" +
+      "Statut : <select data-idx='" + idx + "'>" +
+      Object.keys(STATUS_LABEL).map(function (k) {
+        return "<option value='" + k + "'" + (getStatus(f) === k ? " selected" : "") + ">" + STATUS_LABEL[k] + "</option>";
+      }).join("") + "</select>";
+    if (img) html += "<img src='" + esc(img) + "' alt='capture' onerror=\"this.style.display='none'\">";
+    return html;
+  }
+
+  function refresh() {
+    layer.clearLayers();
+    var shown = filtered(), bounds = [];
+    shown.forEach(function (f) {
+      var ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+      var resolved = getStatus(f) === "resolu";
+      var m = L.circleMarker(ll, {
+        radius: 6 + (WEIGHT[f.properties.gravite] || 1) * 2,
+        color: "#fff", weight: 1.5,
+        fillColor: COLORS[f.properties.gravite] || "#38bdf8",
+        fillOpacity: resolved ? 0.25 : 0.9
+      }).bindPopup(function () { return popupHtml(f, features.indexOf(f)); });
+      m.addTo(layer); bounds.push(ll);
+      f._marker = m;
+    });
+    // compteurs
+    var c = { elevee: 0, moyenne: 0, faible: 0 };
+    shown.forEach(function (f) { if (c[f.properties.gravite] !== undefined) c[f.properties.gravite]++; });
+    document.getElementById("k-total").textContent = shown.length;
+    ["elevee", "moyenne", "faible"].forEach(function (k) { document.getElementById("k-" + k).textContent = c[k]; });
+    // liste priorisée (les résolus passent en bas)
+    var list = document.getElementById("list");
+    list.innerHTML = "";
+    shown.slice().sort(function (a, b) {
+      var ra = getStatus(a) === "resolu" ? 1 : 0, rb = getStatus(b) === "resolu" ? 1 : 0;
+      return ra - rb || score(b) - score(a);
+    }).slice(0, 15).forEach(function (f) {
+      var d = document.createElement("div");
+      d.className = "item";
+      d.innerHTML = "<span class='dot' style='background:" + (COLORS[f.properties.gravite] || "#38bdf8") + "'></span>" +
+        "<div><div class='t'>#" + esc(f.properties.id) + " " + esc(f.properties.classe) + "</div>" +
+        "<div class='s'>gravité " + esc(f.properties.gravite) + " · conf. " + esc(f.properties.confiance_max) + "</div></div>" +
+        "<span class='badge'>" + STATUS_LABEL[getStatus(f)] + "</span>";
+      d.addEventListener("click", function () {
+        map.flyTo([f.geometry.coordinates[1], f.geometry.coordinates[0]], 18);
+        if (f._marker) f._marker.openPopup();
+      });
+      list.appendChild(d);
+    });
+    return bounds;
+  }
+
+  function load(geojson, base, demo) {
+    if (!geojson || !Array.isArray(geojson.features)) throw new Error("Fichier GeoJSON invalide");
+    features = geojson.features.filter(function (f) {
+      return f.geometry && f.geometry.type === "Point" && f.properties;
+    });
+    baseUrl = base || "";
+    isDemo = !!demo || features.some(function (f) { return f.properties.demo; });
+    var b = document.getElementById("banner");
+    if (isDemo) {
+      b.style.display = "block";
+      b.textContent = "Données de démonstration fictives – ne pas présenter comme des résultats réels.";
+    } else { b.style.display = "none"; }
+    var bounds = refresh();
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+    document.getElementById("msg").textContent = features.length + " anomalie(s) chargée(s).";
+  }
+
+  function fetchGeo(url, demo) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function (g) {
+      load(g, url.replace(/[^\/]*$/, ""), demo);
+    });
+  }
+
+  // --- événements interface
+  document.querySelectorAll("input[data-sev]").forEach(function (c) { c.addEventListener("change", refresh); });
+  document.getElementById("f-status").addEventListener("change", refresh);
+  document.getElementById("btn-file").addEventListener("click", function () { document.getElementById("file").click(); });
+  document.getElementById("file").addEventListener("change", function (e) {
+    var file = e.target.files[0]; if (!file) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try { load(JSON.parse(rd.result), "", false); }
+      catch (err) { document.getElementById("msg").textContent = "Erreur : " + err.message; }
+    };
+    rd.readAsText(file);
+  });
+  document.getElementById("btn-demo").addEventListener("click", function () {
+    fetchGeo("events_demo.geojson", true).catch(function (err) {
+      document.getElementById("msg").textContent = "Démo introuvable (" + err.message + ").";
+    });
+  });
+  document.getElementById("btn-csv").addEventListener("click", function () {
+    var rows = [["id", "classe", "gravite", "confiance_max", "lat", "lon", "statut"]];
+    filtered().forEach(function (f) {
+      var p = f.properties;
+      rows.push([p.id, p.classe, p.gravite, p.confiance_max, f.geometry.coordinates[1], f.geometry.coordinates[0], getStatus(f)]);
+    });
+    var csv = rows.map(function (r) { return r.join(","); }).join("\n");
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "anomalies_export.csv"; a.click();
+  });
+  // changement de statut depuis la fenêtre contextuelle
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.matches && t.matches(".leaflet-popup-content select[data-idx]")) {
+      var f = features[parseInt(t.dataset.idx, 10)];
+      if (f) setStatus(f, t.value);
+    }
+  });
+  // glisser-déposer d'un fichier sur la page
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) {
+    e.preventDefault();
+    var file = e.dataTransfer.files[0]; if (!file) return;
+    var rd = new FileReader();
+    rd.onload = function () { try { load(JSON.parse(rd.result), "", false); } catch (err) {
+      document.getElementById("msg").textContent = "Erreur : " + err.message; } };
+    rd.readAsText(file);
+  });
+
+  // chargement automatique : ?src=autre.geojson, sinon events.geojson du même dossier
+  var src = new URLSearchParams(location.search).get("src") || "events.geojson";
+  fetchGeo(src, false).catch(function () {
+    document.getElementById("msg").textContent =
+      "events.geojson introuvable. Lancez un serveur local dans ce dossier, ou chargez un fichier ci-dessus.";
+  });
+})();
+</script>
+</body>
+</html>

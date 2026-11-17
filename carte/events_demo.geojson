@@ -1,0 +1,7 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-17.3412,14.7601]},"properties":{"id":1,"classe":"pothole","gravite":"elevee","confiance_max":0.86,"temps_video_s":4.2,"images_vues":18,"capture":"","demo":true}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-17.3395,14.7608]},"properties":{"id":2,"classe":"pothole","gravite":"moyenne","confiance_max":0.71,"temps_video_s":9.8,"images_vues":11,"capture":"","demo":true}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-17.3378,14.7615]},"properties":{"id":3,"classe":"pothole","gravite":"faible","confiance_max":0.52,"temps_video_s":15.1,"images_vues":6,"capture":"","demo":true}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-17.3360,14.7622]},"properties":{"id":4,"classe":"pothole","gravite":"elevee","confiance_max":0.79,"temps_video_s":21.4,"images_vues":14,"capture":"","demo":true}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-17.3344,14.7630]},"properties":{"id":5,"classe":"pothole","gravite":"moyenne","confiance_max":0.64,"temps_video_s":27.0,"images_vues":9,"capture":"","demo":true}}
+]}
